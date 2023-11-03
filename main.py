@@ -9,24 +9,33 @@ from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-send_url = 'http://127.0.0.1:50021'
+send_url = 'http://127.0.0.1'
+send_port = 50021
 
 app = FastAPI()
 
+@app.post("/change_target_port")
+async def post_change_target_port(port: int):
+    send_port = port
+
 @app.get("/speakers")
 async def get_speakers():
-    requests_client = httpx.AsyncClient()
-    response = await requests_client.get(send_url + '/speakers')
-    vv_speakers_json = response.json()
-    await requests_client.aclose()
-
     with open('speakers.json', 'r', encoding='utf-8') as f:
         speakers_json = json.load(f)
+
+    vv_speakers_json_dict = {}
+    for speaker in speakers_json:
+        port = speaker["vv_port"]
+        if not str(port) in vv_speakers_json_dict:
+            requests_client = httpx.AsyncClient()
+            response = await requests_client.get(send_url + ':' + str(port) + '/speakers')
+            vv_speakers_json_dict[str(port)] = response.json()
+            await requests_client.aclose()
 
     ret = []
     style_count = 0
     for speaker in speakers_json:
-        for vv_speaker in vv_speakers_json:
+        for vv_speaker in vv_speakers_json_dict[str(speaker["vv_port"])]:
             if vv_speaker["speaker_uuid"] == speaker["vv_speaker_uuid"]:
                 new_speaker = copy.deepcopy(vv_speaker)
                 new_speaker["speaker_uuid"] = speaker["uuid"]
@@ -48,16 +57,17 @@ async def get_speaker_info(speaker_uuid: str, core_version: str | None = None):
         if speaker["uuid"] == speaker_uuid:
             requests_client = httpx.AsyncClient()
             if core_version is not None:
-                response = await requests_client.get(send_url + '/speaker_info', params={
+                response = await requests_client.get(send_url + ':' + str(speaker["vv_port"]) + '/speaker_info', params={
                     "speaker_uuid": speaker["vv_speaker_uuid"],
                     "core_version": core_version
                     })
             else:
-                response = await requests_client.get(send_url + '/speaker_info', params={
+                response = await requests_client.get(send_url + ':' + str(speaker["vv_port"]) + '/speaker_info', params={
                     "speaker_uuid": speaker["vv_speaker_uuid"]
                     })
             result_content = response.content
             await requests_client.aclose()
+            send_port = speaker["vv_port"]
             return Response(content=result_content, media_type='application/json')
     
     result_content_json = jsonable_encoder({
@@ -76,7 +86,7 @@ async def get_speaker_info(speaker_uuid: str, core_version: str | None = None):
 @app.get("/setting")
 async def get_default(request: Request):
     requests_client = httpx.AsyncClient()
-    response = await requests_client.get(send_url + request.url.path)
+    response = await requests_client.get(send_url + ':' + str(send_port) + request.url.path, params=request.query_params)
     result_content = response.content
     result_headers = dict(response.headers)
     result_status_code = response.status_code
@@ -105,7 +115,7 @@ async def get_default(request: Request):
 async def post_default(request: Request):
     data: bytes = await request.body()
     requests_client = httpx.AsyncClient()
-    response = await requests_client.post(send_url + request.url.path, content=data, params=request.query_params)
+    response = await requests_client.post(send_url + ':' + str(send_port) + request.url.path, content=data, params=request.query_params)
     result_content = response.content
     result_headers = dict(response.headers)
     result_status_code = response.status_code
@@ -115,7 +125,7 @@ async def post_default(request: Request):
 @app.put("/user_dict_word/{word_uuid}")
 async def put_user_dict_word(word_uuid: str, request: Request):
     requests_client = httpx.AsyncClient()
-    response = await requests_client.put(send_url + request.url.path)
+    response = await requests_client.put(send_url + ':' + str(send_port) + request.url.path, params=request.query_params)
     result_content = response.content
     result_headers = dict(response.headers)
     result_status_code = response.status_code
@@ -125,7 +135,7 @@ async def put_user_dict_word(word_uuid: str, request: Request):
 @app.delete("/user_dict_word/{word_uuid}")
 async def delete_user_dict_word(word_uuid: str, request: Request):
     requests_client = httpx.AsyncClient()
-    response = await requests_client.delete(send_url + request.url.path)
+    response = await requests_client.delete(send_url + ':' + str(send_port) + request.url.path, params=request.query_params)
     result_content = response.content
     result_headers = dict(response.headers)
     result_status_code = response.status_code
