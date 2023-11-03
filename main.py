@@ -75,11 +75,34 @@ async def get_speaker_info(speaker_uuid: str, core_version: str | None = None):
     })
     return JSONResponse(content=result_content_json, status_code=404)
 
+async def local_get_speaker(speaker: int):
+    with open('speakers.json', 'r', encoding='utf-8') as f:
+        speakers_json = json.load(f)
+
+    vv_speakers_json_dict = {}
+    for speaker_json in speakers_json:
+        port = speaker_json["vv_port"]
+        if not str(port) in vv_speakers_json_dict:
+            requests_client = httpx.AsyncClient()
+            response = await requests_client.get(send_url + ':' + str(port) + '/speakers')
+            vv_speakers_json_dict[str(port)] = response.json()
+            await requests_client.aclose()
+
+    style_count = 0
+    for speaker_json in speakers_json:
+        for vv_speaker in vv_speakers_json_dict[str(speaker_json["vv_port"])]:
+            if vv_speaker["speaker_uuid"] == speaker_json["vv_speaker_uuid"]:
+                if style_count <= speaker and speaker < style_count + len(vv_speaker["styles"]):
+                    send_port = speaker_json["vv_port"]
+                    return vv_speaker["styles"][speaker - style_count]["id"]
+                style_count += len(vv_speaker["styles"])
+
+    return -1
+
 @app.get("/presets")
 @app.get("/version")
 @app.get("/core_versions")
 @app.get("/downloadable_libraries")
-@app.get("/is_initialized_speaker")
 @app.get("/supported_devices")
 @app.get("/engine_manifest")
 @app.get("/user_dict")
@@ -93,22 +116,25 @@ async def get_default(request: Request):
     await requests_client.aclose()
     return Response(content=result_content, headers=result_headers, status_code=result_status_code)
 
-@app.post("/audio_query")
+@app.get("/is_initialized_speaker")
+async def get_is_initialized_speaker(request: Request):
+    params = dict(request.query_params)
+    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    requests_client = httpx.AsyncClient()
+    response = await requests_client.get(send_url + ':' + str(send_port) + request.url.path, params=params)
+    result_content = response.content
+    result_headers = dict(response.headers)
+    result_status_code = response.status_code
+    await requests_client.aclose()
+    return Response(content=result_content, headers=result_headers, status_code=result_status_code)
+
 @app.post("/audio_query_from_preset")
-@app.post("/accent_phrases")
-@app.post("/mora_data")
-@app.post("/mora_length")
-@app.post("/mora_pitch")
-@app.post("/synthesis")
-@app.post("/cancellable_synthesis")
-@app.post("/multi_synthesis")
 @app.post("/morphable_targets")
 @app.post("/synthesis_morphing")
 @app.post("/connect_waves")
 @app.post("/add_preset")
 @app.post("/update_preset")
 @app.post("/delete_preset")
-@app.post("/initialize_speaker")
 @app.post("/user_dict_word")
 @app.post("/import_user_dict")
 @app.post("/setting")
@@ -121,6 +147,30 @@ async def post_default(request: Request):
     result_status_code = response.status_code
     await requests_client.aclose()
     return Response(content=result_content, headers=result_headers, status_code=result_status_code)
+
+@app.post("/audio_query")
+@app.post("/accent_phrases")
+@app.post("/mora_data")
+@app.post("/mora_length")
+@app.post("/mora_pitch")
+@app.post("/initialize_speaker")
+async def post_default_with_speaker(request: Request):
+    data: bytes = await request.body()
+    params = dict(request.query_params)
+    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    requests_client = httpx.AsyncClient()
+    response = await requests_client.post(send_url + ':' + str(send_port) + request.url.path, content=data, params=params)
+    result_content = response.content
+    result_headers = dict(response.headers)
+    result_status_code = response.status_code
+    await requests_client.aclose()
+    return Response(content=result_content, headers=result_headers, status_code=result_status_code)
+
+@app.post("/synthesis")
+@app.post("/cancellable_synthesis")
+@app.post("/multi_synthesis")
+async def post_dummy():
+    return {}
 
 @app.put("/user_dict_word/{word_uuid}")
 async def put_user_dict_word(word_uuid: str, request: Request):
