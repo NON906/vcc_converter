@@ -1,19 +1,73 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
+import copy
 import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 send_url = 'http://127.0.0.1:50021'
 
 app = FastAPI()
 
+@app.get("/speakers")
+async def get_speakers():
+    requests_client = httpx.AsyncClient()
+    response = await requests_client.get(send_url + '/speakers')
+    vv_speakers_json = response.json()
+    await requests_client.aclose()
+
+    with open('speakers.json', 'r', encoding='utf-8') as f:
+        speakers_json = json.load(f)
+
+    ret = []
+    style_count = 0
+    for speaker in speakers_json:
+        for vv_speaker in vv_speakers_json:
+            if vv_speaker["speaker_uuid"] == speaker["vv_speaker_uuid"]:
+                new_speaker = copy.deepcopy(vv_speaker)
+                new_speaker["speaker_uuid"] = speaker["uuid"]
+                new_speaker["name"] = speaker["name"]
+                for style in new_speaker["styles"]:
+                    style["id"] = style_count
+                    style_count += 1
+                ret.append(new_speaker)
+                break
+
+    return ret
+
+@app.get("/speaker_info")
+async def get_speaker_info(speaker_uuid: str, core_version: str | None = None):
+    with open('speakers.json', 'r', encoding='utf-8') as f:
+        speakers_json = json.load(f)
+
+    for speaker in speakers_json:
+        if speaker["uuid"] == speaker_uuid:
+            requests_client = httpx.AsyncClient()
+            if core_version is not None:
+                response = await requests_client.get(send_url + '/speaker_info', params={
+                    "speaker_uuid": speaker["vv_speaker_uuid"],
+                    "core_version": core_version
+                    })
+            else:
+                response = await requests_client.get(send_url + '/speaker_info', params={
+                    "speaker_uuid": speaker["vv_speaker_uuid"]
+                    })
+            result_content = response.content
+            await requests_client.aclose()
+            return Response(content=result_content, media_type='application/json')
+    
+    result_content_json = jsonable_encoder({
+        "detail": "該当する話者が見つかりません"
+    })
+    return JSONResponse(content=result_content_json, status_code=404)
+
 @app.get("/presets")
 @app.get("/version")
 @app.get("/core_versions")
-@app.get("/speakers")
-@app.get("/speaker_info")
 @app.get("/downloadable_libraries")
 @app.get("/is_initialized_speaker")
 @app.get("/supported_devices")
