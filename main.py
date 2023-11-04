@@ -8,6 +8,7 @@ import os
 import subprocess
 import wave
 import base64
+import shutil
 from io import BytesIO
 import uvicorn
 import httpx
@@ -133,10 +134,10 @@ async def local_get_speaker(speaker: int):
             if vv_speaker["speaker_uuid"] == speaker_json["vv_speaker_uuid"]:
                 if style_count <= speaker and speaker < style_count + len(vv_speaker["styles"]):
                     send_port = speaker_json["vv_port"]
-                    return vv_speaker["styles"][speaker - style_count]["id"]
+                    return vv_speaker["styles"][speaker - style_count]["id"], speaker_json["vcc_id"]
                 style_count += len(vv_speaker["styles"])
 
-    return -1
+    return -1, -1
 
 @app.post("/initialize_speaker")
 async def post_initialize_speaker(request: Request):
@@ -144,7 +145,7 @@ async def post_initialize_speaker(request: Request):
         await launch_voice_changer()
     data: bytes = await request.body()
     params = dict(request.query_params)
-    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    params["speaker"], _ = await local_get_speaker(int(params["speaker"]))
     requests_client = httpx.AsyncClient()
     response = await requests_client.post(send_url + ':' + str(send_port) + '/initialize_speaker', content=data, params=params)
     result_content = response.content
@@ -158,7 +159,9 @@ async def get_is_initialized_speaker(request: Request):
     if not await check_voice_changer():
         return Response(content='false', media_type='application/json')
     params = dict(request.query_params)
-    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    params["speaker"], _ = await local_get_speaker(int(params["speaker"]))
+    if params["speaker"] < 0:
+        return Response(content='false', media_type='application/json')
     requests_client = httpx.AsyncClient()
     response = await requests_client.get(send_url + ':' + str(send_port) + '/is_initialized_speaker', params=params)
     result_content = response.content
@@ -204,18 +207,42 @@ async def vcc_test(wav_content: bytes, vcc_id: int, write_file):
 async def post_synthesis(request: Request):
     data = await request.json()
     params = dict(request.query_params)
-    vcc_id = int(params["speaker"])
     data['outputSamplingRate'] = 48000
-    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    params["speaker"], vcc_id = await local_get_speaker(int(params["speaker"]))
     requests_client = httpx.AsyncClient()
     response = await requests_client.post(send_url + ':' + str(send_port) + request.url.path, content=json.dumps(data), params=params)
     result_content = response.content
+    result_status_code = response.status_code
     await requests_client.aclose()
+
+    if result_status_code != 200:
+        return Response(content=result_content, media_type='application/json', status_code=result_status_code)
 
     fileIO = BytesIO()
     await vcc_test(result_content, vcc_id, fileIO)
 
     return Response(content=fileIO.getvalue(), media_type='audio/wav')
+
+@app.post("/multi_synthesis")
+async def post_multi_synthesis(request: Request):
+    datas_json = await request.json()
+    params = dict(request.query_params)
+    vcc_id = int(params["speaker"])
+    params["speaker"], vcc_id = await local_get_speaker(int(params["speaker"]))
+    os.makedirs('./.temp/dir_zip', exist_ok=True)
+    for loop, data in enumerate(datas_json):
+        data['outputSamplingRate'] = 48000
+        requests_client = httpx.AsyncClient()
+        response = await requests_client.post(send_url + ':' + str(send_port) + '/synthesis', content=json.dumps(data), params=params)
+        result_content = response.content
+        await requests_client.aclose()
+        with open('./.temp/dir_zip/%03d.wav' % (loop + 1), 'wb') as f:
+            await vcc_test(result_content, vcc_id, f)
+    shutil.make_archive('./.temp/multi_synthesis', format='zip', root_dir='./.temp/dir_zip')
+    with open('./.temp/multi_synthesis.zip', 'rb') as f:
+        ret = f.read()
+    shutil.rmtree('./.temp')
+    return Response(content=ret, media_type='application/zip')
 
 @app.get("/presets")
 @app.get("/version")
@@ -262,7 +289,7 @@ async def post_default(request: Request):
 async def post_default_with_speaker(request: Request):
     data: bytes = await request.body()
     params = dict(request.query_params)
-    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    params["speaker"], _ = await local_get_speaker(int(params["speaker"]))
     requests_client = httpx.AsyncClient()
     response = await requests_client.post(send_url + ':' + str(send_port) + request.url.path, content=data, params=params)
     result_content = response.content
@@ -270,10 +297,6 @@ async def post_default_with_speaker(request: Request):
     result_status_code = response.status_code
     await requests_client.aclose()
     return Response(content=result_content, headers=result_headers, status_code=result_status_code)
-
-@app.post("/multi_synthesis")
-async def post_dummy():
-    return {}
 
 @app.put("/user_dict_word/{word_uuid}")
 async def put_user_dict_word(word_uuid: str, request: Request):
