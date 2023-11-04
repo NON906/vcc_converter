@@ -22,6 +22,21 @@ vcc_url = 'http://127.0.0.1:18888'
 vcc_exe_file = r"D:\Unity\TatieGenerator\Projects\bat\bin\MMVCServerSIO\start_http.bat"
 timestamp = 0
 
+def load_global_settings():
+    global send_url
+    global vcc_url
+    global vcc_exe_file
+    with open('global.json', 'r', encoding='utf-8') as f:
+        json_dict = json.load(f)
+    send_url = json_dict['url']
+    vcc_url = json_dict['url'] + ':' + str(json_dict['vcc_port'])
+    if json_dict['vcc_exe_file_embedded']:
+        vcc_exe_file = 'bin/MMVCServerSIO/start_http.bat'
+    else:
+        vcc_exe_file = json_dict['vcc_exe_file']
+
+load_global_settings()
+
 app = FastAPI()
 
 async def check_voice_changer():
