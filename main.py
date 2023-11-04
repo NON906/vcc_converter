@@ -3,6 +3,9 @@
 
 import json
 import copy
+import argparse
+import os
+import subprocess
 import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response
@@ -11,8 +14,26 @@ from fastapi.responses import JSONResponse
 
 send_url = 'http://127.0.0.1'
 send_port = 50021
+vcc_url = 'http://127.0.0.1:18888'
+vcc_exe_file = r"D:\Unity\TatieGenerator\Projects\bat\bin\MMVCServerSIO\start_http.bat"
 
 app = FastAPI()
+
+async def check_voice_changer():
+    try:
+        requests_client = httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=1.0))
+        res = await requests_client.get(vcc_url + '/api/hello')
+        ret = res.status_code == 200
+        await requests_client.aclose()
+        return ret
+    except:
+        return False
+
+def launch_voice_changer():
+    current_path = os.getcwd()
+    os.chdir(os.path.dirname(vcc_exe_file))
+    subprocess.Popen(os.path.basename(vcc_exe_file))
+    os.chdir(current_path)
 
 @app.post("/change_target_port")
 async def post_change_target_port(port: int):
@@ -99,6 +120,35 @@ async def local_get_speaker(speaker: int):
 
     return -1
 
+@app.post("/initialize_speaker")
+async def post_initialize_speaker(request: Request):
+    if not await check_voice_changer():
+        launch_voice_changer()
+    data: bytes = await request.body()
+    params = dict(request.query_params)
+    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    requests_client = httpx.AsyncClient()
+    response = await requests_client.post(send_url + ':' + str(send_port) + '/initialize_speaker', content=data, params=params)
+    result_content = response.content
+    result_headers = dict(response.headers)
+    result_status_code = response.status_code
+    await requests_client.aclose()
+    return Response(content=result_content, headers=result_headers, status_code=result_status_code)
+
+@app.get("/is_initialized_speaker")
+async def get_is_initialized_speaker(request: Request):
+    if not await check_voice_changer():
+        return Response(content='false', media_type='application/json')
+    params = dict(request.query_params)
+    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    requests_client = httpx.AsyncClient()
+    response = await requests_client.get(send_url + ':' + str(send_port) + '/is_initialized_speaker', params=params)
+    result_content = response.content
+    result_headers = dict(response.headers)
+    result_status_code = response.status_code
+    await requests_client.aclose()
+    return Response(content=result_content, headers=result_headers, status_code=result_status_code)
+
 @app.get("/presets")
 @app.get("/version")
 @app.get("/core_versions")
@@ -110,18 +160,6 @@ async def local_get_speaker(speaker: int):
 async def get_default(request: Request):
     requests_client = httpx.AsyncClient()
     response = await requests_client.get(send_url + ':' + str(send_port) + request.url.path, params=request.query_params)
-    result_content = response.content
-    result_headers = dict(response.headers)
-    result_status_code = response.status_code
-    await requests_client.aclose()
-    return Response(content=result_content, headers=result_headers, status_code=result_status_code)
-
-@app.get("/is_initialized_speaker")
-async def get_is_initialized_speaker(request: Request):
-    params = dict(request.query_params)
-    params["speaker"] = await local_get_speaker(int(params["speaker"]))
-    requests_client = httpx.AsyncClient()
-    response = await requests_client.get(send_url + ':' + str(send_port) + request.url.path, params=params)
     result_content = response.content
     result_headers = dict(response.headers)
     result_status_code = response.status_code
@@ -153,7 +191,6 @@ async def post_default(request: Request):
 @app.post("/mora_data")
 @app.post("/mora_length")
 @app.post("/mora_pitch")
-@app.post("/initialize_speaker")
 async def post_default_with_speaker(request: Request):
     data: bytes = await request.body()
     params = dict(request.query_params)
