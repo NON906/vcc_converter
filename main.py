@@ -6,6 +6,9 @@ import copy
 import argparse
 import os
 import subprocess
+import wave
+import base64
+from io import BytesIO
 import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response
@@ -16,6 +19,7 @@ send_url = 'http://127.0.0.1'
 send_port = 50021
 vcc_url = 'http://127.0.0.1:18888'
 vcc_exe_file = r"D:\Unity\TatieGenerator\Projects\bat\bin\MMVCServerSIO\start_http.bat"
+timestamp = 0
 
 app = FastAPI()
 
@@ -29,11 +33,25 @@ async def check_voice_changer():
     except:
         return False
 
-def launch_voice_changer():
+async def launch_voice_changer():
+    global timestamp
+
     current_path = os.getcwd()
     os.chdir(os.path.dirname(vcc_exe_file))
     subprocess.Popen(os.path.basename(vcc_exe_file))
     os.chdir(current_path)
+
+    while not await check_voice_changer():
+        pass
+
+    requests_client = httpx.AsyncClient()
+    json_data = {
+        'timestamp': timestamp,
+        'buffer': base64.b64encode(bytes(48000 * 2)).decode("utf-8")
+    }
+    timestamp += 1
+    await requests_client.post(vcc_url + '/test', content=json.dumps(json_data))
+    await requests_client.aclose()
 
 @app.post("/change_target_port")
 async def post_change_target_port(port: int):
@@ -123,7 +141,7 @@ async def local_get_speaker(speaker: int):
 @app.post("/initialize_speaker")
 async def post_initialize_speaker(request: Request):
     if not await check_voice_changer():
-        launch_voice_changer()
+        await launch_voice_changer()
     data: bytes = await request.body()
     params = dict(request.query_params)
     params["speaker"] = await local_get_speaker(int(params["speaker"]))
@@ -148,6 +166,56 @@ async def get_is_initialized_speaker(request: Request):
     result_status_code = response.status_code
     await requests_client.aclose()
     return Response(content=result_content, headers=result_headers, status_code=result_status_code)
+
+async def vcc_test(wav_content: bytes, vcc_id: int, write_file):
+    global timestamp
+
+    if not await check_voice_changer():
+        await launch_voice_changer()
+
+    vc_input = b''
+    file_in_memory = BytesIO(wav_content)
+    with wave.open(file_in_memory, 'rb') as wav_file:
+        vc_input += wav_file.readframes(wav_file.getnframes())
+
+    if vcc_id >= 0:
+        requests_client = httpx.AsyncClient()
+        response = await requests_client.post(vcc_url + '/update_settings', content=json.dumps({'key': 'modelSlotIndex', 'val': vcc_id}))
+        await requests_client.aclose()
+
+    requests_client = httpx.AsyncClient()
+    json_data = {
+        'timestamp': timestamp,
+        'buffer': base64.b64encode(vc_input).decode("utf-8")
+    }
+    timestamp += 1
+    response = await requests_client.post(vcc_url + '/test', content=json.dumps(json_data))
+    base64_str = response.json()['changedVoiceBase64']
+    await requests_client.aclose()
+    
+    with wave.open(write_file, 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(48000)
+        wav_file.writeframes(base64.b64decode(base64_str))
+
+@app.post("/synthesis")
+@app.post("/cancellable_synthesis")
+async def post_synthesis(request: Request):
+    data = await request.json()
+    params = dict(request.query_params)
+    vcc_id = int(params["speaker"])
+    data['outputSamplingRate'] = 48000
+    params["speaker"] = await local_get_speaker(int(params["speaker"]))
+    requests_client = httpx.AsyncClient()
+    response = await requests_client.post(send_url + ':' + str(send_port) + request.url.path, content=json.dumps(data), params=params)
+    result_content = response.content
+    await requests_client.aclose()
+
+    fileIO = BytesIO()
+    await vcc_test(result_content, vcc_id, fileIO)
+
+    return Response(content=fileIO.getvalue(), media_type='audio/wav')
 
 @app.get("/presets")
 @app.get("/version")
@@ -203,8 +271,6 @@ async def post_default_with_speaker(request: Request):
     await requests_client.aclose()
     return Response(content=result_content, headers=result_headers, status_code=result_status_code)
 
-@app.post("/synthesis")
-@app.post("/cancellable_synthesis")
 @app.post("/multi_synthesis")
 async def post_dummy():
     return {}
