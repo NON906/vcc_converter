@@ -10,7 +10,6 @@ import wave
 import base64
 import shutil
 import threading
-import asyncio
 from io import BytesIO
 import uvicorn
 import httpx
@@ -23,7 +22,7 @@ import setting_ui
 send_url = 'http://127.0.0.1'
 send_port = 50021
 vcc_url = 'http://127.0.0.1:18888'
-vcc_exe_file = r"D:\Unity\TatieGenerator\Projects\bat\bin\MMVCServerSIO\start_http.bat"
+vcc_exe_file = r""
 timestamp = 0
 setting_ui_obj = None
 
@@ -357,10 +356,5 @@ if __name__ == "__main__":
         speakers_json = json.load(f)
     if len(speakers_json) <= 0:
         open_setting_ui()
-        async def run_vcc():
-            if not await check_voice_changer():
-                await launch_voice_changer()
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(run_vcc())
 
     uvicorn.run(app, port=55100)
