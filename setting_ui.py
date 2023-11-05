@@ -33,7 +33,7 @@ class SettingUI(tk.Tk):
             state='disabled' if self.global_json_dict['vcc_exe_file_embedded'] else 'normal')
         self.vcc_exe_file_button.pack(anchor=tk.E)
         self.vcc_exe_file_embedded = tk.BooleanVar(value=self.global_json_dict['vcc_exe_file_embedded'])
-        tk.Checkbutton(self, text='内部でインストールして使用する', variable=self.vcc_exe_file_embedded, command=self.change_vcc_exe_file_embedded).pack(anchor=tk.W)
+        #tk.Checkbutton(self, text='内部でインストールして使用する', variable=self.vcc_exe_file_embedded, command=self.change_vcc_exe_file_embedded).pack(anchor=tk.W)
         tk.Button(self, text='設定を反映', command=self.click_vcc_exe_file_reflect_button).pack(anchor=tk.E)
 
         tk.Label(self, text="* 話者の設定").pack(anchor=tk.W)
