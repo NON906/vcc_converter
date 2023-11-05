@@ -10,6 +10,7 @@ import wave
 import base64
 import shutil
 import threading
+import asyncio
 from io import BytesIO
 import uvicorn
 import httpx
@@ -349,5 +350,17 @@ async def delete_user_dict_word(word_uuid: str, request: Request):
     return Response(content=result_content, headers=result_headers, status_code=result_status_code)
 
 if __name__ == "__main__":
-    #open_setting_ui()
+    if not os.path.isfile('speakers.json'):
+        with open('speakers.json', 'w', encoding='utf-8') as f:
+            f.write('[]')
+    with open('speakers.json', 'r', encoding='utf-8') as f:
+        speakers_json = json.load(f)
+    if len(speakers_json) <= 0:
+        open_setting_ui()
+        async def run_vcc():
+            if not await check_voice_changer():
+                await launch_voice_changer()
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(run_vcc())
+
     uvicorn.run(app, port=55100)
