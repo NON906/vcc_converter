@@ -187,6 +187,7 @@ class SettingUI(tk.Tk):
             json.dump(self.speakers_json_dict, f)
 
         self.speakers_combobox.config(values=self.speakers_combobox_list())
+        self.speakers_combobox.current(current)
 
     def click_speakers_delete_button(self):
         current = self.speakers_combobox.current()
