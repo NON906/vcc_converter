@@ -9,6 +9,7 @@ import subprocess
 import wave
 import base64
 import shutil
+import threading
 from io import BytesIO
 import uvicorn
 import httpx
@@ -16,11 +17,14 @@ from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
+import setting_ui
+
 send_url = 'http://127.0.0.1'
 send_port = 50021
 vcc_url = 'http://127.0.0.1:18888'
 vcc_exe_file = r"D:\Unity\TatieGenerator\Projects\bat\bin\MMVCServerSIO\start_http.bat"
 timestamp = 0
+setting_ui_obj = None
 
 def load_global_settings():
     global send_url
@@ -38,6 +42,16 @@ def load_global_settings():
 load_global_settings()
 
 app = FastAPI()
+
+def open_setting_ui():
+    global setting_ui_obj
+    if setting_ui_obj is None:
+        def thread_func():
+            setting_ui_obj = setting_ui.SettingUI()
+            setting_ui_obj.mainloop()
+            setting_ui_obj = None
+        thread = threading.Thread(target=thread_func)
+        thread.start()
 
 async def check_voice_changer():
     try:
@@ -156,6 +170,7 @@ async def local_get_speaker(speaker: int):
 
 @app.post("/initialize_speaker")
 async def post_initialize_speaker(request: Request):
+    open_setting_ui()
     if not await check_voice_changer():
         await launch_voice_changer()
     data: bytes = await request.body()
@@ -334,4 +349,5 @@ async def delete_user_dict_word(word_uuid: str, request: Request):
     return Response(content=result_content, headers=result_headers, status_code=result_status_code)
 
 if __name__ == "__main__":
+    #open_setting_ui()
     uvicorn.run(app, port=55100)
