@@ -25,7 +25,7 @@ class SettingUI(tk.Tk):
         with open('speakers.json', 'r', encoding='utf-8') as f:
             self.speakers_json_dict = json.load(f)
 
-        tk.Label(self, text="* VC Clientのパス").pack(anchor=tk.W)
+        tk.Label(self, text="* VC Clientのパス（※start_http.batを指定）").pack(anchor=tk.W)
         self.vcc_exe_file = tk.Entry(self, state='disabled' if self.global_json_dict['vcc_exe_file_embedded'] else 'normal', width=80)
         self.vcc_exe_file.insert(0, self.global_json_dict['vcc_exe_file'])
         self.vcc_exe_file.pack(anchor=tk.W)
@@ -36,7 +36,7 @@ class SettingUI(tk.Tk):
         #tk.Checkbutton(self, text='内部でインストールして使用する', variable=self.vcc_exe_file_embedded, command=self.change_vcc_exe_file_embedded).pack(anchor=tk.W)
         tk.Button(self, text='設定を反映', command=self.click_vcc_exe_file_reflect_button).pack(anchor=tk.E)
 
-        tk.Label(self, text="* 話者の設定").pack(anchor=tk.W)
+        tk.Label(self, text="* 話者の設定（※再起動後に有効）").pack(anchor=tk.W)
         tk.Label(self, text="話者：").pack(anchor=tk.W)
         speakers = self.speakers_combobox_list()
         self.speakers_combobox = ttk.Combobox(self, values=speakers, width=80, state="readonly")
