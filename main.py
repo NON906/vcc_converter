@@ -16,6 +16,7 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 import setting_ui
 
@@ -42,6 +43,14 @@ def load_global_settings():
 load_global_settings()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def open_setting_ui():
     global setting_ui_obj
@@ -122,6 +131,26 @@ async def get_speaker_info(speaker_uuid: str, core_version: str | None = None):
     with open('speakers.json', 'r', encoding='utf-8') as f:
         speakers_json = json.load(f)
 
+    vv_speakers_json_dict = {}
+    for speaker_json in speakers_json:
+        port = speaker_json["vv_port"]
+        if not str(port) in vv_speakers_json_dict:
+            requests_client = httpx.AsyncClient()
+            response = await requests_client.get(send_url + ':' + str(port) + '/speakers')
+            vv_speakers_json_dict[str(port)] = response.json()
+            await requests_client.aclose()
+
+    start_style_id = -1
+    style_count = 0
+    for speaker_json in speakers_json:
+        for vv_speaker in vv_speakers_json_dict[str(speaker_json["vv_port"])]:
+            if vv_speaker["speaker_uuid"] == speaker_json["vv_speaker_uuid"]:
+                start_style_id = style_count
+                break
+            style_count += len(vv_speaker["styles"])
+        if start_style_id >= 0:
+            break
+
     for speaker in speakers_json:
         if speaker["uuid"] == speaker_uuid:
             requests_client = httpx.AsyncClient()
@@ -134,10 +163,12 @@ async def get_speaker_info(speaker_uuid: str, core_version: str | None = None):
                 response = await requests_client.get(send_url + ':' + str(speaker["vv_port"]) + '/speaker_info', params={
                     "speaker_uuid": speaker["vv_speaker_uuid"]
                     })
-            result_content = response.content
+            result_json = response.json()
             await requests_client.aclose()
+            for loop in range(len(result_json["style_infos"])):
+                result_json["style_infos"][loop]["id"] = start_style_id + loop
             send_port = speaker["vv_port"]
-            return Response(content=result_content, media_type='application/json')
+            return result_json
     
     result_content_json = jsonable_encoder({
         "detail": "該当する話者が見つかりません"
@@ -274,12 +305,36 @@ async def post_multi_synthesis(request: Request):
     shutil.rmtree('./.temp')
     return Response(content=ret, media_type='application/zip')
 
-@app.get("/presets")
+@app.get("/engine_manifest")
+async def get_engine_manifest():
+    with open('engine_manifest.json', 'r', encoding='utf-8') as f:
+        from_json = json.load(f)
+    ret = copy.deepcopy(from_json)
+    del ret['command']
+    del ret['port']
+    del ret['version']
+    with open(from_json['icon'], 'rb') as f:
+        ret['icon'] = base64.b64encode(f.read()).decode("utf-8")
+    with open(from_json['terms_of_service'], 'r', encoding='utf-8') as f:
+        ret['terms_of_service'] = f.read()
+    with open(from_json['update_infos'], 'r', encoding='utf-8') as f:
+        ret['update_infos'] = json.load(f)
+    with open(from_json['dependency_licenses'], 'r', encoding='utf-8') as f:
+        ret['dependency_licenses'] = json.load(f)
+    for key in from_json['supported_features'].keys():
+        ret['supported_features'][key] = from_json['supported_features'][key]['value']
+    return ret
+
 @app.get("/version")
+async def get_version():
+    with open('engine_manifest.json', 'r', encoding='utf-8') as f:
+        from_json = json.load(f)
+    return from_json['version']
+
+@app.get("/presets")
 @app.get("/core_versions")
 @app.get("/downloadable_libraries")
 @app.get("/supported_devices")
-@app.get("/engine_manifest")
 @app.get("/user_dict")
 @app.get("/setting")
 async def get_default(request: Request):

@@ -1,0 +1,59 @@
+{
+  "manifest_version": "0.13.1",
+  "name": "VC Client Connector",
+  "brand_name": "VC Client Connector",
+  "uuid": "c8d32e95-5518-895b-40f4-9a2fe01de5c4",
+  "version": "0.1.0",
+  "url": "http://test.com",
+  "command": "run.bat",
+  "port": 55100,
+  "icon": "engine_manifest_assets/icon.png",
+  "default_sampling_rate": 48000,
+  "terms_of_service": "engine_manifest_assets/terms_of_service.md",
+  "update_infos": "engine_manifest_assets/update_infos.json",
+  "dependency_licenses": "engine_manifest_assets/dependency_licenses.json",
+  "downloadable_libraries_path": null,
+  "downloadable_libraries_url": null,
+  "supported_features": {
+    "adjust_mora_pitch": {
+      "type": "bool",
+      "value": true,
+      "name": "モーラごとの音高の調整"
+    },
+    "adjust_phoneme_length": {
+      "type": "bool",
+      "value": true,
+      "name": "音素ごとの長さの調整"
+    },
+    "adjust_speed_scale": {
+      "type": "bool",
+      "value": true,
+      "name": "全体の話速の調整"
+    },
+    "adjust_pitch_scale": {
+      "type": "bool",
+      "value": true,
+      "name": "全体の音高の調整"
+    },
+    "adjust_intonation_scale": {
+      "type": "bool",
+      "value": true,
+      "name": "全体の抑揚の調整"
+    },
+    "adjust_volume_scale": {
+      "type": "bool",
+      "value": true,
+      "name": "全体の音量の調整"
+    },
+    "interrogative_upspeak": {
+      "type": "bool",
+      "value": true,
+      "name": "疑問文の自動調整"
+    },
+    "synthesis_morphing": {
+      "type": "bool",
+      "value": true,
+      "name": "2人の話者でモーフィングした音声を合成"
+    }
+  }
+}
