@@ -68,7 +68,8 @@ class SettingUI(tk.Tk):
         default_dir = os.path.dirname(self.vcc_exe_file.get())
         file_name = tk.filedialog.askopenfilename(filetypes=file_type, initialdir=default_dir)
         if len(file_name) > 0:
-            self.vcc_exe_file.set(file_name)
+            self.vcc_exe_file.delete(0, tk.END)
+            self.vcc_exe_file.insert(0, file_name)
 
     def change_vcc_exe_file_embedded(self):
         if self.vcc_exe_file_embedded.get():
