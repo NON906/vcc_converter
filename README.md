@@ -10,7 +10,7 @@
 - [VOICEVOX](https://voicevox.hiroshiba.jp/)
 - [VC Client](https://github.com/w-okada/voice-changer)
 
-2. [こちら]()から最新の「vcc_converter_vX.X.X_win.vvpp」ファイルをダウンロードしてください。
+2. [こちら](https://github.com/NON906/vcc_converter/releases)から最新の「vcc_converter_vX.X.X_win.vvpp」ファイルをダウンロードしてください。
 
 3. VOICEVOXを起動し、メニューバーの「設定→オプション」で、「マルチエンジン機能」を有効にしてください。
 
